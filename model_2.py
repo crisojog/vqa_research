@@ -18,7 +18,7 @@ def collapse_sum(x):
 
 def BLSTM(text_input):
     return Bidirectional(
-        LSTM(512, U_regularizer=l2(0.01), return_sequences=True, consume_less='gpu'),
+        LSTM(512, U_regularizer=l2(0.01), return_sequences=True),
         merge_mode="sum")(text_input)
 
 
