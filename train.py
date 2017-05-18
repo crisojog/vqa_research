@@ -1,9 +1,8 @@
 import argparse
-import cPickle as pickle
 import os
 
 from preprocess import get_most_common_answers
-from utils import plot_accuracy, plot_eval_accuracy, plot_loss
+from utils import plot_accuracy, plot_eval_accuracy, plot_loss, get_train_data, get_val_data
 from train_utils import *
 from model_utils import get_model
 
@@ -24,40 +23,6 @@ imgDir_val        = '%s/Images/%s/%s/' %(dataDir, dataType, dataSubType_val)
 vqa_val = VQA(annFile_val, quesFile_val)
 
 
-def get_train_data(ans_types):
-    if ans_types:
-        extra = "_%s" % ans_types.replace("/", "")
-    else:
-        extra = ""
-    print "Loading train questions"
-    ques_train_map = pickle.load(open("data/train_questions.pkl", "r"))
-    print "Loading train answers"
-    ans_train_map = pickle.load(open("data/train_answers%s.pkl" % extra, "r"))
-    print "Loading train images"
-    img_train_map = pickle.load(open("data/train_images.pkl", "r"))
-    print "Loading ques_to_img map"
-    ques_to_img_train = pickle.load(open("data/train_ques_to_img.pkl", "r"))
-    print "Done"
-    return ques_train_map, ans_train_map, img_train_map, ques_to_img_train
-
-
-def get_val_data(ans_types):
-    if ans_types:
-        extra = "_%s" % ans_types.replace("/", "")
-    else:
-        extra = ""
-    print "Loading validation questions"
-    ques_val_map = pickle.load(open("data/val_questions.pkl", "r"))
-    print "Loading validation answers"
-    ans_val_map = pickle.load(open("data/val_answers%s.pkl" % extra, "r"))
-    print "Loading validation images"
-    img_val_map = pickle.load(open("data/val_images.pkl", "r"))
-    print "Loading ques_to_img map"
-    ques_to_img_val = pickle.load(open("data/val_ques_to_img.pkl", "r"))
-    print "Done"
-    return ques_val_map, ans_val_map, img_val_map, ques_to_img_val
-
-
 # Train our model
 def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, ques_to_img_train,
                 ques_val_map, ans_val_map, img_val_map, ques_val_ids, ques_to_img_val,
@@ -68,7 +33,7 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
     batch_size = params['batch_size']
     num_batches_train = train_dim // batch_size
     num_batches_val = val_dim // batch_size
-    eval_every = 5
+    eval_every = 2
 
     train_loss, train_acc = [], []
     val_loss, val_acc = [], []

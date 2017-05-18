@@ -82,7 +82,7 @@ def process_answer(ann, data, ans_map, ans_to_id, id_to_ans, use_all_ans=False):
     if quesId in ans_map:
         return ans_map[quesId]
     encoding = np.zeros(len(id_to_ans))
-    if use_all_ans:
+    if not use_all_ans:
         answer = ann['multiple_choice_answer'].lower()
         if answer in ans_to_id:
             encoding[ans_to_id[answer]] = 1
@@ -188,7 +188,8 @@ def process_answers(vqa, data, ans_types, ans_to_id, id_to_ans, overwrite, use_a
         f.close()
 
 
-def process_images(img_model, vqa, data, data_sub_type, img_dir, img_model_name, overwrite):
+def process_images(img_model, vqa, data, data_sub_type, img_dir, img_model_name, overwrite,
+                   avg=None, use_translation=False):
     filename = "data/%s_images.pkl" % data
 
     if not os.path.exists(filename) or overwrite:
@@ -199,6 +200,8 @@ def process_images(img_model, vqa, data, data_sub_type, img_dir, img_model_name,
         input_shape = get_input_shape(img_model_name)
         output_shape = get_output_shape(img_model_name)
 
+        rolling_sum = None
+        num_images = 0
         for ann in tqdm(anns):
             imgId = int(ann['image_id'])
             if imgId in img_map:
@@ -207,12 +210,29 @@ def process_images(img_model, vqa, data, data_sub_type, img_dir, img_model_name,
             img = process_img(img_model, ann, data_sub_type, img_dir, input_shape, output_shape)
             if img is None:
                 continue
+            if rolling_sum is None:
+                rolling_sum = img
+            else:
+                rolling_sum += img
+            num_images += 1
 
             img_map[imgId] = img
+
+        if avg is None:
+            avg = rolling_sum / num_images
+
+        if use_translation:
+            for ann in anns:
+                imgId = int(ann['image_id'])
+                img_map[imgId] = np.array(img_map[imgId]) - avg
+                img_map[imgId] /= LA.norm(img_map[imgId], 2)
+                img_map[imgId] = img_map[imgId].tolist()
 
         f = open(filename, "w")
         pickle.dump(img_map, f, pickle.HIGHEST_PROTOCOL)
         f.close()
+
+        return avg
 
 
 def process_ques_to_img(vqa, data, overwrite):
@@ -233,9 +253,11 @@ def process_ques_to_img(vqa, data, overwrite):
         f.close()
 
 
-def process_train_data(vqa_train, dataSubType_train, imgDir_train, nlp, img_model, ans_types, ans_to_id,
-                       id_to_ans, only, img_model_name, overwrite, use_all_ans):
+def process_data(vqa_train, dataSubType_train, imgDir_train, vqa_val, dataSubType_val, imgDir_val,
+                 nlp, img_model, ans_types, ans_to_id, id_to_ans, only, img_model_name, overwrite,
+                 use_all_ans, use_translation):
 
+    avg = None
     if only == 'all' or only == 'ques':
         print "Processing train questions"
         process_questions(vqa_train, "train", nlp, overwrite)
@@ -244,15 +266,13 @@ def process_train_data(vqa_train, dataSubType_train, imgDir_train, nlp, img_mode
         process_answers(vqa_train, "train", ans_types, ans_to_id, id_to_ans, overwrite, use_all_ans)
     if only == 'all' or only == 'img':
         print "Processing train images"
-        process_images(img_model, vqa_train, "train", dataSubType_train, imgDir_train, img_model_name, overwrite)
+        avg = process_images(img_model, vqa_train, "train", dataSubType_train, imgDir_train, img_model_name, overwrite,
+                             use_translation=use_translation)
     if only == 'all' or only == 'ques_to_img':
         print "Processing train question id to image id mapping"
         process_ques_to_img(vqa_train, "train", overwrite)
     print "Done"
 
-
-def process_val_data(vqa_val, dataSubType_val, imgDir_val, nlp, img_model, ans_types, ans_to_id, id_to_ans,
-                     only, img_model_name, overwrite, use_all_ans):
 
     if only == 'all' or only == 'ques':
         print "Processing validation questions"
@@ -262,7 +282,8 @@ def process_val_data(vqa_val, dataSubType_val, imgDir_val, nlp, img_model, ans_t
         process_answers(vqa_val, "val", ans_types, ans_to_id, id_to_ans, overwrite, use_all_ans)
     if only == 'all' or only == 'img':
         print "Processing validation images"
-        process_images(img_model, vqa_val, "val", dataSubType_val, imgDir_val, img_model_name, overwrite)
+        process_images(img_model, vqa_val, "val", dataSubType_val, imgDir_val, img_model_name, overwrite, avg,
+                       use_translation=use_translation)
     if only == 'all' or only == 'ques_to_img':
         print "Processing validation question id to image id mapping"
         process_ques_to_img(vqa_val, "val", overwrite)
@@ -286,17 +307,14 @@ def main(params):
     imgDir_val = '%s/Images/%s/%s/' % (dataDir, dataType, dataSubType_val)
     vqa_val = VQA(annFile_val, quesFile_val)
 
-    nlp = spacy.load('en', vectors='en_glove_cc_300_1m_vectors')
+    nlp = spacy.load('en_vectors_glove_md') #spacy.load('en', vectors='en_glove_cc_300_1m_vectors')
 
     ans_to_id, id_to_ans = get_most_common_answers(vqa_train, int(params['num_answers']), params['ans_types'],
                                                    params['show_top_ans'])
     img_model = get_img_model(params['img_model'])
-    process_train_data(vqa_train, dataSubType_train, imgDir_train, nlp, img_model, params['ans_types'],
-                       ans_to_id, id_to_ans, params['only'], params['img_model'], params['overwrite'],
-                       params['use_all_ans'])
-    process_val_data(vqa_val, dataSubType_val, imgDir_val, nlp, img_model, params['ans_types'],
-                     ans_to_id, id_to_ans, params['only'], params['img_model'], params['overwrite'],
-                     params['use_all_ans'])
+    process_data(vqa_train, dataSubType_train, imgDir_train, vqa_val, dataSubType_val, imgDir_val,
+                 nlp, img_model, params['ans_types'], ans_to_id, id_to_ans, params['only'], params['img_model'],
+                 params['overwrite'], params['use_all_ans'], params['use_translation'])
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -309,6 +327,7 @@ if __name__ == "__main__":
     parser.add_argument('--overwrite', default=False, type=bool, help='force overwrite')
     parser.add_argument('--use_all_ans', default=False, type=bool, help='use all answers for training or only multiple'
                                                                         ' choice answer')
+    parser.add_argument('--use_translation', default=False, type=bool, help='translate images by subtracting average')
 
     args = parser.parse_args()
     params = vars(args)
