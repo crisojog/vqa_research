@@ -23,7 +23,8 @@ fileTypes = ['results', 'accuracy', 'evalQA', 'evalQuesType', 'evalAnsType']
                                          resultType, fileType) for fileType in fileTypes]
 
 
-def get_batch(batch, batch_size, ques_map, ans_map, img_map, ques_ids, ques_to_img):
+def get_batch(batch, batch_size, ques_map, ans_map,
+            img_map, ques_ids, ques_to_img, word_embedding_size):
     # get ids in the current batch
     batch_ids = ques_ids[batch * batch_size: min((batch + 1) * batch_size, len(ques_ids))]
     # filter out ids which don't have question, answer or image
@@ -40,7 +41,9 @@ def get_batch(batch, batch_size, ques_map, ans_map, img_map, ques_ids, ques_to_i
     batch_ques_aligned = []
     for question in batch_questions:
         if len(question) < max_len:
-            batch_ques_aligned.append(np.append(question, np.zeros((max_len - len(question), 300)), axis=0))
+            batch_ques_aligned.append(
+                np.append(question, np.zeros((max_len - len(question), word_embedding_size)), axis=0)
+            )
         else:
             batch_ques_aligned.append(question)
     # finally, construct train_X, and train_y
@@ -58,13 +61,15 @@ def train_epoch(
         ans_map,
         img_map,
         ques_ids,
-        ques_to_img):
+        ques_to_img,
+        word_embedding_size):
     # shuffle all question ids on each epoch
     np.random.shuffle(ques_ids)
 
     loss, accuracy, total = .0, .0, .0
     for batch in tqdm(range(num_batches), desc="Train epoch %d" % epoch_no):
-        train_X, train_y = get_batch(batch, batch_size, ques_map, ans_map, img_map, ques_ids, ques_to_img)
+        train_X, train_y = get_batch(batch, batch_size, ques_map, ans_map, img_map,
+                                        ques_ids, ques_to_img, word_embedding_size)
         total += len(train_y)
         # ... and train model with the batch
         l, a = model.train_on_batch(train_X, train_y)
@@ -85,10 +90,12 @@ def val_epoch(
         ans_map,
         img_map,
         ques_ids,
-        ques_to_img):
+        ques_to_img,
+        word_embedding_size):
     loss, accuracy, total = .0, .0, .0
     for batch in tqdm(range(num_batches), desc="Val epoch %d" % epoch_no):
-        val_X, val_y = get_batch(batch, batch_size, ques_map, ans_map, img_map, ques_ids, ques_to_img)
+        val_X, val_y = get_batch(batch, batch_size, ques_map, ans_map, img_map,
+                                    ques_ids, ques_to_img, word_embedding_size)
         total += len(val_y)
         l, a = model.test_on_batch(val_X, val_y)
         loss += l * len(val_y)
@@ -99,14 +106,17 @@ def val_epoch(
     return loss, accuracy
 
 
-def process_question_batch(model, questions, question_ids, id_to_ans, images, results):
+def process_question_batch(model, questions, question_ids,
+                            id_to_ans, images, results, word_embedding_size):
     # find out maximum length of a question in this batch
     max_len = max([len(ques) for ques in questions])
     # ... and pad all questions in the batch to that length (more efficient than padding all questions to a single maximum length)
     ques_aligned = []
     for question in questions:
         if len(question) < max_len:
-            ques_aligned.append(np.append(question, np.zeros((max_len - len(question), 300)), axis=0))
+            ques_aligned.append(
+                np.append(question, np.zeros((max_len - len(question), word_embedding_size)), axis=0)
+            )
         else:
             ques_aligned.append(question)
     val_X = [np.array(images), np.array(ques_aligned)]
@@ -144,6 +154,7 @@ def evaluate(
         img_map,
         id_to_ans,
         ans_types,
+        word_embedding_size,
         verbose=False):
     annIds = vqa.getQuesIds()
     anns = vqa.loadQA(annIds)
@@ -158,11 +169,13 @@ def evaluate(
         question_ids.append(ann['question_id'])
         images.append(img_map[ann['image_id']])
         if len(questions) == batch_size:
-            process_question_batch(model, questions, question_ids, id_to_ans, images, results)
+            process_question_batch(model, questions, question_ids, id_to_ans,
+                                    images, results, word_embedding_size)
             # clear arrays
             questions, question_ids, images = [], [], []
     if len(questions) > 0:
-        process_question_batch(model, questions, question_ids, id_to_ans, images, results)
+        process_question_batch(model, questions, question_ids, id_to_ans,
+                                    images, results, word_embedding_size)
 
     # save results as a json
     with open(resFile, "w") as outfile:

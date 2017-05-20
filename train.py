@@ -1,8 +1,9 @@
 import argparse
 import os
+import math
 
+from utils import *
 from preprocess import get_most_common_answers
-from utils import plot_accuracy, plot_eval_accuracy, plot_loss, get_train_data, get_val_data
 from train_utils import *
 from model_utils import get_model
 
@@ -31,8 +32,8 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
     # training parameters
     num_epochs = params['num_epochs']
     batch_size = params['batch_size']
-    num_batches_train = train_dim // batch_size
-    num_batches_val = val_dim // batch_size
+    num_batches_train = int(math.ceil(float(train_dim) / batch_size))
+    num_batches_val = int(math.ceil(float(val_dim) / batch_size))
     eval_every = 2
 
     train_loss, train_acc = [], []
@@ -55,19 +56,20 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
     if not os.path.exists(savedir):
         os.mkdir(savedir)
 
+    word_embedding_size = int(params['embedding_size'])
     for k in range(num_epochs):
         loss, acc = train_epoch(k + 1, model, num_batches_train, batch_size, ques_train_map, ans_train_map,
-                                img_train_map, ques_train_ids, ques_to_img_train)
+                                img_train_map, ques_train_ids, ques_to_img_train, word_embedding_size)
         train_loss.append(loss)
         train_acc.append(acc)
         loss, acc = val_epoch(k + 1, model, num_batches_val, batch_size, ques_val_map, ans_val_map, img_val_map,
-                              ques_val_ids, ques_to_img_val)
+                              ques_val_ids, ques_to_img_val, word_embedding_size)
         val_loss.append(loss)
         val_acc.append(acc)
         if (k + 1) % eval_every == 0:
             model.save_weights("%s/%s_epoch_%d_weights.h5" % (savedir, params['model'], (k + 1)), overwrite=True)
-            eval_accuracy = evaluate(
-                model, vqa_val, batch_size, ques_val_map, img_val_map, id_to_ans, params['ans_types'])
+            eval_accuracy = evaluate(model, vqa_val, batch_size, ques_val_map, img_val_map,
+                                        id_to_ans, params['ans_types'], word_embedding_size)
             print ("Eval accuracy: %.2f" % eval_accuracy)
             eval_acc.append(eval_accuracy)
 
@@ -79,7 +81,8 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
     print "Best accuracy %.02f on epoch %d" % (max(eval_acc), best_epoch)
 
     model.load_weights("%s/%s_epoch_%d_weights.h5" % (savedir, params['model'], best_epoch))
-    evaluate(model, vqa_val, batch_size, ques_val_map, img_val_map, id_to_ans, params['ans_types'], verbose=True)
+    evaluate(model, vqa_val, batch_size, ques_val_map, img_val_map, id_to_ans,
+                params['ans_types'], word_embedding_size, verbose=True)
 
 
 def main(params):
@@ -115,7 +118,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', default=1000, type=int, help='batch size for training')
     parser.add_argument('--dropout_rate', default=0.5, type=float, help='dropout rate for the dropout layers')
     parser.add_argument('--regularization_rate', default=0., type=float, help='regularization rate for the FC layers')
-    parser.add_argument('--embedding_size', default=300, type=int, help='length of the a word embedding')
+    parser.add_argument('--embedding_size', default=300, type=int, help='length of the word embedding')
 
     args = parser.parse_args()
     params = vars(args)
