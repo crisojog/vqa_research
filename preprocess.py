@@ -323,11 +323,16 @@ if __name__ == "__main__":
     parser.add_argument('--num_answers', default=1000, type=int, help='number of top answers to classify')
     parser.add_argument('--img_model', default='resnet50', help='which image model to use for embeddings')
     parser.add_argument('--only', default='all', help='which data to preprocess (all, ques, ans, img, ques_to_img)')
-    parser.add_argument('--show_top_ans', default=False, help='show plot with top answers')
-    parser.add_argument('--overwrite', default=False, type=bool, help='force overwrite')
-    parser.add_argument('--use_all_ans', default=False, type=bool, help='use all answers for training or only multiple'
-                                                                        ' choice answer')
-    parser.add_argument('--use_translation', default=False, type=bool, help='translate images by subtracting average')
+    parser.add_argument('--show_top_ans', dest='show_top_ans', action='store_true', help='show plot with top answers')
+    parser.set_defaults(show_top_ans=False)
+    parser.add_argument('--overwrite', dest='overwrite', action='store_true', help='force overwrite')
+    parser.set_defaults(overwrite=False)
+    parser.add_argument('--use_all_ans', dest='use_all_ans', action='store_true',
+                                help='use all answers for training, otherwise use only the multiple choice answer')
+    parser.set_defaults(use_all_ans=False)
+    parser.add_argument('--use_translation', dest='use_translation', action='store_true',
+                                help='translate images by substracting average')
+    parser.set_defaults(use_translation=False)
 
     args = parser.parse_args()
     params = vars(args)
