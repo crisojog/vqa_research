@@ -1,6 +1,10 @@
 #!/bin/bash
 
 git clone https://github.com/VT-vision-lab/VQA.git
+
+mkdir data
+mkdir models
+
 cd VQA
 mkdir Annotations
 mkdir Images
