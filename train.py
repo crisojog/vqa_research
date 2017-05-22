@@ -57,19 +57,20 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
         os.mkdir(savedir)
 
     word_embedding_size = int(params['embedding_size'])
+    use_first_words = params['use_first_words']
     for k in range(num_epochs):
         loss, acc = train_epoch(k + 1, model, num_batches_train, batch_size, ques_train_map, ans_train_map,
-                                img_train_map, ques_train_ids, ques_to_img_train, word_embedding_size)
+                                img_train_map, ques_train_ids, ques_to_img_train, word_embedding_size, use_first_words)
         train_loss.append(loss)
         train_acc.append(acc)
         loss, acc = val_epoch(k + 1, model, num_batches_val, batch_size, ques_val_map, ans_val_map, img_val_map,
-                              ques_val_ids, ques_to_img_val, word_embedding_size)
+                              ques_val_ids, ques_to_img_val, word_embedding_size, use_first_words)
         val_loss.append(loss)
         val_acc.append(acc)
         if (k + 1) % eval_every == 0:
             model.save_weights("%s/%s_epoch_%d_weights.h5" % (savedir, params['model'], (k + 1)), overwrite=True)
             eval_accuracy = evaluate(model, vqa_val, batch_size, ques_val_map, img_val_map,
-                                        id_to_ans, params['ans_types'], word_embedding_size)
+                                        id_to_ans, params['ans_types'], word_embedding_size, use_first_words)
             print ("Eval accuracy: %.2f" % eval_accuracy)
             eval_acc.append(eval_accuracy)
 
@@ -82,7 +83,7 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
 
     model.load_weights("%s/%s_epoch_%d_weights.h5" % (savedir, params['model'], best_epoch))
     evaluate(model, vqa_val, batch_size, ques_val_map, img_val_map, id_to_ans,
-                params['ans_types'], word_embedding_size, verbose=True)
+                params['ans_types'], word_embedding_size, use_first_words, verbose=True)
 
 
 def main(params):
@@ -118,8 +119,9 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', default=1000, type=int, help='batch size for training')
     parser.add_argument('--dropout_rate', default=0.5, type=float, help='dropout rate for the dropout layers')
     parser.add_argument('--regularization_rate', default=0., type=float, help='regularization rate for the FC layers')
-    parser.add_argument('--embedding_size', default=300, type=int, help='length of the a word embedding')
+    parser.add_argument('--embedding_size', default=300, type=int, help='length of the word embedding')
     parser.add_argument('--eval_every', default=5, type=int, help='how often to run the model evaluation')
+    parser.add_argument('--use_first_words', default=0, type=int, help='use the first X words of the question as a model parameter')
 
     args = parser.parse_args()
     params = vars(args)
