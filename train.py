@@ -1,8 +1,8 @@
 import argparse
 import os
 
+from utils import *
 from preprocess import get_most_common_answers
-from utils import plot_accuracy, plot_eval_accuracy, plot_loss, get_train_data, get_val_data
 from train_utils import *
 from model_utils import get_model
 
@@ -33,7 +33,7 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
     batch_size = params['batch_size']
     num_batches_train = train_dim // batch_size
     num_batches_val = val_dim // batch_size
-    eval_every = 2
+    eval_every = params['eval_every']
 
     train_loss, train_acc = [], []
     val_loss, val_acc = [], []
@@ -116,6 +116,7 @@ if __name__ == "__main__":
     parser.add_argument('--dropout_rate', default=0.5, type=float, help='dropout rate for the dropout layers')
     parser.add_argument('--regularization_rate', default=0., type=float, help='regularization rate for the FC layers')
     parser.add_argument('--embedding_size', default=300, type=int, help='length of the a word embedding')
+    parser.add_argument('--eval_every', default=5, type=int, help='how often to run the model evaluation')
 
     args = parser.parse_args()
     params = vars(args)
