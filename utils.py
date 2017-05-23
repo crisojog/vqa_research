@@ -36,35 +36,58 @@ def plot_eval_accuracy(eval_acc, savedir):
     plt.clf()
 
 
-def get_train_data(ans_types):
+def get_train_data(ans_types, use_test):
     if ans_types:
         extra = "_%s" % ans_types.replace("/", "")
     else:
         extra = ""
-    print "Loading train questions"
-    ques_train_map = pickle.load(open("data/train_questions.pkl", "r"))
-    print "Loading train answers"
-    ans_train_map = pickle.load(open("data/train_answers%s.pkl" % extra, "r"))
-    print "Loading train images"
-    img_train_map = pickle.load(open("data/train_images.pkl", "r"))
-    print "Loading ques_to_img map"
-    ques_to_img_train = pickle.load(open("data/train_ques_to_img.pkl", "r"))
-    print "Done"
-    return ques_train_map, ans_train_map, img_train_map, ques_to_img_train
+    if not use_test:
+        print "Loading train questions"
+        ques_train_map = pickle.load(open("data/train_questions.pkl", "r"))
+        print "Loading train answers"
+        ans_train_map = pickle.load(open("data/train_answers%s.pkl" % extra, "r"))
+        print "Loading train images"
+        img_train_map = pickle.load(open("data/train_images.pkl", "r"))
+        print "Loading ques_to_img map"
+        ques_to_img_train = pickle.load(open("data/train_ques_to_img.pkl", "r"))
+        print "Done"
+        return ques_train_map, ans_train_map, img_train_map, ques_to_img_train
+    else:
+        print "Loading train_val questions"
+        ques_train_map = pickle.load(open("data/train_val_questions.pkl", "r"))
+        print "Loading train_val answers"
+        ans_train_map = pickle.load(open("data/train_val_answers%s.pkl" % extra, "r"))
+        print "Loading train_val images"
+        img_train_map = pickle.load(open("data/train_val_images.pkl", "r"))
+        print "Loading ques_to_img map"
+        ques_to_img_train = pickle.load(open("data/train_val_ques_to_img.pkl", "r"))
+        print "Done"
+        return ques_train_map, ans_train_map, img_train_map, ques_to_img_train
 
 
-def get_val_data(ans_types):
+def get_val_data(ans_types, use_test):
     if ans_types:
         extra = "_%s" % ans_types.replace("/", "")
     else:
         extra = ""
-    print "Loading validation questions"
-    ques_val_map = pickle.load(open("data/val_questions.pkl", "r"))
-    print "Loading validation answers"
-    ans_val_map = pickle.load(open("data/val_answers%s.pkl" % extra, "r"))
-    print "Loading validation images"
-    img_val_map = pickle.load(open("data/val_images.pkl", "r"))
-    print "Loading ques_to_img map"
-    ques_to_img_val = pickle.load(open("data/val_ques_to_img.pkl", "r"))
-    print "Done"
-    return ques_val_map, ans_val_map, img_val_map, ques_to_img_val
+
+    if not use_test:
+        print "Loading validation questions"
+        ques_val_map = pickle.load(open("data/val_questions.pkl", "r"))
+        print "Loading validation answers"
+        ans_val_map = pickle.load(open("data/val_answers%s.pkl" % extra, "r"))
+        print "Loading validation images"
+        img_val_map = pickle.load(open("data/val_images.pkl", "r"))
+        print "Loading ques_to_img map"
+        ques_to_img_val = pickle.load(open("data/val_ques_to_img.pkl", "r"))
+        print "Done"
+        return ques_val_map, ans_val_map, img_val_map, ques_to_img_val
+    else:
+        print "Loading test questions"
+        ques_val_map = pickle.load(open("data/test_questions.pkl", "r"))
+        print "Loading test images"
+        img_val_map = pickle.load(open("data/test_images.pkl", "r"))
+        print "Loading ques_to_img map"
+        ques_to_img_val = pickle.load(open("data/test_ques_to_img.pkl", "r"))
+        print "Done"
+        return ques_val_map, None, img_val_map, ques_to_img_val

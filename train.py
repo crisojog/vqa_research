@@ -23,6 +23,10 @@ quesFile_val      = '%s/Questions/%s_%s_%s_questions.json'%(dataDir, taskType, d
 imgDir_val        = '%s/Images/%s/%s/' %(dataDir, dataType, dataSubType_val)
 vqa_val = VQA(annFile_val, quesFile_val)
 
+dataSubType_test  = 'test-dev2015'  # Hardcoded for test-dev
+quesFile_test     = '%s/Questions/%s_%s_%s_questions.json' % (dataDir, taskType, dataType, dataSubType_test)
+imgDir_test       = '%s/Images/%s/%s/' % (dataDir, dataType, 'test2015')
+
 
 # Train our model
 def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, ques_to_img_train,
@@ -62,50 +66,81 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
                                 img_train_map, ques_train_ids, ques_to_img_train, word_embedding_size)
         train_loss.append(loss)
         train_acc.append(acc)
-        loss, acc = val_epoch(k + 1, model, num_batches_val, batch_size, ques_val_map, ans_val_map, img_val_map,
-                              ques_val_ids, ques_to_img_val, word_embedding_size)
-        val_loss.append(loss)
-        val_acc.append(acc)
+        if not params['use_test']:
+            loss, acc = val_epoch(k + 1, model, num_batches_val, batch_size, ques_val_map, ans_val_map, img_val_map,
+                                  ques_val_ids, ques_to_img_val, word_embedding_size)
+            val_loss.append(loss)
+            val_acc.append(acc)
         if (k + 1) % eval_every == 0:
             model.save_weights("%s/%s_epoch_%d_weights.h5" % (savedir, params['model'], (k + 1)), overwrite=True)
-            eval_accuracy = evaluate(model, vqa_val, batch_size, ques_val_map, img_val_map,
-                                        id_to_ans, params['ans_types'], word_embedding_size)
-            print ("Eval accuracy: %.2f" % eval_accuracy)
-            eval_acc.append(eval_accuracy)
+            if not params['use_test']:
+                eval_accuracy = evaluate(model, vqa_val, batch_size, ques_val_map, img_val_map,
+                                         id_to_ans, word_embedding_size)
+                print ("Eval accuracy: %.2f" % eval_accuracy)
+                eval_acc.append(eval_accuracy)
 
     plot_loss(train_loss, val_loss, savedir)
     plot_accuracy(train_acc, val_acc, savedir)
-    plot_eval_accuracy(eval_acc, savedir)
 
-    best_epoch = (1 + np.argmax(np.array(eval_acc))) * eval_every
-    print "Best accuracy %.02f on epoch %d" % (max(eval_acc), best_epoch)
+    if not params['use_test']:
+        plot_eval_accuracy(eval_acc, savedir)
 
-    model.load_weights("%s/%s_epoch_%d_weights.h5" % (savedir, params['model'], best_epoch))
-    evaluate(model, vqa_val, batch_size, ques_val_map, img_val_map, id_to_ans,
-                params['ans_types'], word_embedding_size, verbose=True)
+        best_epoch = (1 + np.argmax(np.array(eval_acc))) * eval_every
+        print "Best accuracy %.02f on epoch %d" % (max(eval_acc), best_epoch)
+
+        model.load_weights("%s/%s_epoch_%d_weights.h5" % (savedir, params['model'], best_epoch))
+        evaluate(model, vqa_val, batch_size, ques_val_map, img_val_map, id_to_ans,
+                 word_embedding_size, verbose=True)
 
 
 def main(params):
-    ans_to_id, id_to_ans = get_most_common_answers(vqa_train, int(params['num_answers']), params['ans_types'])
+    ans_to_id, id_to_ans = get_most_common_answers(vqa_train, vqa_val, int(params['num_answers']), params['ans_types'],
+                                                   show_top_ans=False, use_test=params['use_test'])
 
-    ques_train_map, ans_train_map, img_train_map, ques_to_img_train = get_train_data(params['ans_types'])
-    ques_val_map, ans_val_map, img_val_map, ques_to_img_val = get_val_data(params['ans_types'])
+    ques_train_map, ans_train_map, img_train_map, ques_to_img_train = get_train_data(params['ans_types'],
+                                                                                     params['use_test'])
+    ques_val_map, ans_val_map, img_val_map, ques_to_img_val = get_val_data(params['ans_types'],
+                                                                           params['use_test'])
 
-    filtered_ann_ids_train = set(vqa_train.getQuesIds(ansTypes=params['ans_types']))
-    filtered_ann_ids_val = set(vqa_val.getQuesIds(ansTypes=params['ans_types']))
+    if not params['use_test']:
+        filtered_ann_ids_train = set(vqa_train.getQuesIds(ansTypes=params['ans_types']))
+        filtered_ann_ids_val = set(vqa_val.getQuesIds(ansTypes=params['ans_types']))
+    else:
+        filtered_ann_ids_train = set(vqa_train.getQuesIds(ansTypes=params['ans_types']) +
+                                     vqa_val.getQuesIds(ansTypes=params['ans_types']))
 
     ques_train_ids = ques_train_map.keys()
     ques_val_ids = ques_val_map.keys()
 
     ques_train_ids = np.array([i for i in ques_train_ids if i in filtered_ann_ids_train])
-    ques_val_ids = np.array([i for i in ques_val_ids if i in filtered_ann_ids_val])
+    if not params['use_test']:
+        ques_val_ids = np.array([i for i in ques_val_ids if i in filtered_ann_ids_val])
 
     train_dim, val_dim = len(ques_train_ids), len(ques_val_ids)
     print "Loaded dataset with train size %d and val size %d" % (train_dim, val_dim)
 
-    train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, ques_to_img_train,
-                ques_val_map, ans_val_map, img_val_map, ques_val_ids, ques_to_img_val,
-                id_to_ans, train_dim, val_dim, params['ans_types'], params)
+    if not params['eval_only']:
+        train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, ques_to_img_train,
+                    ques_val_map, ans_val_map, img_val_map, ques_val_ids, ques_to_img_val,
+                    id_to_ans, train_dim, val_dim, params['ans_types'], params)
+    else:
+        savedir = "models/%s_%s" % (params['model'], str(params['num_answers']))
+        print "Loading model"
+        model = get_model(
+            dropout_rate=float(params['dropout_rate']),
+            regularization_rate=float(params['regularization_rate']),
+            embedding_size=int(params['embedding_size']),
+            num_classes=int(params['num_answers']),
+            model_name=params['model'])
+        model.load_weights("%s/%s_epoch_%d_weights.h5" % (savedir, params['model'], params['eval_epoch']))
+        evaluate_for_test(
+            quesFile_test,
+            model,
+            params['batch_size'],
+            ques_val_map,
+            img_val_map,
+            id_to_ans,
+            params['embedding_size'])
 
 
 if __name__ == "__main__":
@@ -120,6 +155,13 @@ if __name__ == "__main__":
     parser.add_argument('--regularization_rate', default=0., type=float, help='regularization rate for the FC layers')
     parser.add_argument('--embedding_size', default=300, type=int, help='length of the a word embedding')
     parser.add_argument('--eval_every', default=5, type=int, help='how often to run the model evaluation')
+    parser.add_argument('--use_test', dest='use_test', action='store_true',
+                        help='use test set (which also means training on train+val')
+    parser.set_defaults(use_test=False)
+    parser.add_argument('--eval_only', dest='eval_only', action='store_true',
+                        help='used to only evaluate a specific model (specify which epoch as well)')
+    parser.set_defaults(eval_only=False)
+    parser.add_argument('--eval_epoch', default=40, type=int, help='epoch to evaluate')
 
     args = parser.parse_args()
     params = vars(args)
