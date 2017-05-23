@@ -299,7 +299,6 @@ def process_data(vqa_train, dataSubType_train, imgDir_train,
                  dataSubType_test, dataFile_test, imgDir_test,
                  nlp, img_model, ans_types, ans_to_id, id_to_ans, only, img_model_name, overwrite,
                  use_all_ans, use_tests):
-    '''
     if only == 'all' or only == 'ques':
         print "Processing train questions"
         if not use_tests:
@@ -331,7 +330,7 @@ def process_data(vqa_train, dataSubType_train, imgDir_train,
             ques_to_img = process_ques_to_img(vqa_train, "train_val", overwrite)
             process_ques_to_img(vqa_val, "train_val", overwrite, ques_to_img)
     print "Done"
-    '''
+    
     # -------------------------------------------------------------------------------------------------
 
     if only == 'all' or only == 'ques':
