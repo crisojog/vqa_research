@@ -73,14 +73,22 @@ def get_most_common_answers(vqa_train, vqa_val, num_answers, ans_types, show_top
     return ans_to_id, id_to_ans
 
 
-def process_question(vqa, ann, nlp, question_word_vec_map):
+def process_question(vqa, ann, nlp, question_word_vec_map, tokens_dict, question_tokens_map):
     quesId = ann['question_id']
     if quesId in question_word_vec_map:
-        return question_word_vec_map[quesId]
+        return question_word_vec_map[quesId], question_tokens_map[quesId]
     question = nlp(vqa.qqa[quesId]['question'])
     question_word_vec = [w.vector for w in question]
 
-    return np.array(question_word_vec)
+    question_len = len(question)
+    question_tokens = [0] * question_len
+    for i in range(question_len):
+        token = question[i]
+        token_l = token.lower_
+        if token.has_vector and token_l in tokens_dict:
+            question_tokens[i] = tokens_dict[token_l]
+
+    return np.array(question_word_vec), np.array(question_tokens)
 
 
 def process_answer(ann, data, ans_map, ans_to_id, id_to_ans, use_all_ans=False):
@@ -143,27 +151,38 @@ def get_output_shape(img_model_name):
         return (2048, 49)
 
 
-def process_questions(vqa, data, nlp, overwrite, question_word_vec_map={}):
+def process_questions(vqa, data, nlp, overwrite, tokens_dict,
+                      question_word_vec_map={}, question_tokens_map={}):
     filename = "data/%s_questions.pkl" % data
-    if not os.path.exists(filename) or overwrite:
-        annIds = vqa.getQuesIds()
-        anns = vqa.loadQA(annIds)
+    filename_tokens = "data/%s_tokens_questions.pkl" % data
 
-        for ann in tqdm(anns):
-            quesId = int(ann['question_id'])
-            if quesId in question_word_vec_map:
-                continue
+    if os.path.exists(filename) and os.path.exists(filename_tokens) and not overwrite:
+        return question_word_vec_map, question_tokens_map
 
-            question = process_question(vqa, ann, nlp, question_word_vec_map)
-            if question is None:
-                continue
+    annIds = vqa.getQuesIds()
+    anns = vqa.loadQA(annIds)
 
-            question_word_vec_map[quesId] = question
+    for ann in tqdm(anns):
+        quesId = int(ann['question_id'])
+        if quesId in question_word_vec_map:
+            continue
 
-        f = open(filename, "w")
-        pickle.dump(question_word_vec_map, f, pickle.HIGHEST_PROTOCOL)
-        f.close()
-    return question_word_vec_map
+        question, question_tokens = process_question(vqa, ann, nlp, question_word_vec_map,
+                                                     tokens_dict, question_tokens_map)
+        if question is None:
+            continue
+
+        question_word_vec_map[quesId] = question
+        question_tokens_map[quesId] = question_tokens
+
+    f = open(filename, "w")
+    pickle.dump(question_word_vec_map, f, pickle.HIGHEST_PROTOCOL)
+    f.close()
+    f = open(filename_tokens, "w")
+    pickle.dump(question_tokens_map, f, pickle.HIGHEST_PROTOCOL)
+    f.close()
+
+    return question_word_vec_map, question_tokens_map
 
 
 def process_answers(vqa, data, ans_types, ans_to_id, id_to_ans, overwrite, use_all_ans, ans_map={}):
@@ -238,21 +257,38 @@ def process_ques_to_img(vqa, data, overwrite, ques_to_img={}):
     return ques_to_img
 
 
-def process_questions_test(dataFile, data, nlp, overwrite, question_word_vec_map={}):
+def process_questions_test(dataFile, data, nlp, overwrite, tokens_dict,
+                           question_word_vec_map={}, question_tokens_map={}):
     filename = "data/%s_questions.pkl" % data
+    filename_tokens = "data/%s_tokens_questions.pkl" % data
 
-    if not os.path.exists(filename) or overwrite:
-        dataset = json.load(open(dataFile, 'r'))
-        for question in tqdm(dataset['questions']):
-            quesId = question['question_id']
-            questext = question['question']
+    if os.path.exists(filename) and os.path.exists(filename_tokens) and not overwrite:
+        return
 
-            ques_nlp = nlp(questext)
-            question_word_vec = [w.vector for w in ques_nlp]
-            question_word_vec_map[quesId] = question_word_vec
-        f = open(filename, "w")
-        pickle.dump(question_word_vec_map, f, pickle.HIGHEST_PROTOCOL)
-        f.close()
+    dataset = json.load(open(dataFile, 'r'))
+    for question in tqdm(dataset['questions']):
+        quesId = question['question_id']
+        questext = question['question']
+
+        ques_nlp = nlp(questext)
+        question_word_vec = [w.vector for w in ques_nlp]
+        question_word_vec_map[quesId] = question_word_vec
+
+        question_len = len(ques_nlp)
+        question_tokens = [0] * question_len
+        for i in range(question_len):
+            token = ques_nlp[i]
+            token_l = token.lower_
+            if token.has_vector and token_l in tokens_dict:
+                question_tokens[i] = tokens_dict[token_l]
+        question_tokens_map[quesId] = question_tokens
+
+    f = open(filename, "w")
+    pickle.dump(question_word_vec_map, f, pickle.HIGHEST_PROTOCOL)
+    f.close()
+    f = open(filename_tokens, "w")
+    pickle.dump(question_tokens_map, f, pickle.HIGHEST_PROTOCOL)
+    f.close()
 
 
 def process_images_test(img_model, data, dataFile, dataSubType, imgDir, img_model_name, overwrite, img_map={}):
@@ -294,18 +330,81 @@ def process_ques_to_img_test(dataFile, data, overwrite, ques_to_img={}):
         f.close()
 
 
+def get_most_common_tokens(vqa, nlp, tokens_dict, dataFile=None):
+    if not dataFile:
+        annIds = vqa.getQuesIds()
+        anns = vqa.loadQA(annIds)
+        for ann in tqdm(anns):
+            quesId = int(ann['question_id'])
+            question = nlp(vqa.qqa[quesId]['question'])
+            question_tokens = [w.lower_ for w in question]
+            for token in question_tokens:
+                if token in tokens_dict:
+                    tokens_dict[token] += 1
+                else:
+                    tokens_dict[token] = 1
+        return
+
+    # get tokens from the test set
+    dataset = json.load(open(dataFile, 'r'))
+    for question in tqdm(dataset['questions']):
+        questext = question['question']
+
+        ques_nlp = nlp(questext)
+        question_tokens = [w.lower_ for w in ques_nlp]
+        for token in question_tokens:
+            if token in tokens_dict:
+                tokens_dict[token] += 1
+            else:
+                tokens_dict[token] = 1
+
+
+def get_tokens_dict(vqa_train, vqa_val, dataFile_test, nlp, word_embedding_dim):
+    tokens_dict = {}
+    get_most_common_tokens(vqa_train, nlp, tokens_dict)
+    get_most_common_tokens(vqa_val, nlp, tokens_dict)
+    get_most_common_tokens(None, nlp, tokens_dict, dataFile=dataFile_test)
+    tokens_dict = sorted(tokens_dict.items(), key=lambda x: x[1])
+    tokens_with_embedding = [(key, value) for (key, value) in tokens_dict if (nlp(key)).has_vector]
+
+    # index 0 will be for unknown tokens or for tokens without word vectors
+    index = 1
+    tokens_dict = {}
+    tokens_embedding = [np.array([0.] * word_embedding_dim)]
+    for (key, _) in tokens_with_embedding:
+        tokens_dict[key] = index
+        tokens_embedding.append(nlp(key).vector)
+        index += 1
+
+    f = open("data/tokens_embedding.pkl", "w")
+    pickle.dump(np.array(tokens_embedding), f, pickle.HIGHEST_PROTOCOL)
+    f.close()
+
+    return tokens_dict
+
+
 def process_data(vqa_train, dataSubType_train, imgDir_train,
                  vqa_val, dataSubType_val, imgDir_val,
                  dataSubType_test, dataFile_test, imgDir_test,
-                 nlp, img_model, ans_types, ans_to_id, id_to_ans, only, img_model_name, overwrite,
-                 use_all_ans, use_tests):
+                 nlp, img_model, ans_to_id, id_to_ans, params):
+    ans_types = params['ans_types']
+    only = params['only']
+    img_model_name = params['img_model']
+    overwrite = params['overwrite']
+    use_all_ans = params['use_all_ans']
+    use_tests = params['use_test']
+    word_embedding_dim = params['word_embedding_dim']
+
     if only == 'all' or only == 'ques':
+        print "Obtaining tokens from all datasets"
+        tokens_dict = get_tokens_dict(vqa_train, vqa_val, dataFile_test, nlp, word_embedding_dim)
         print "Processing train questions"
         if not use_tests:
-            process_questions(vqa_train, "train", nlp, overwrite)
+            process_questions(vqa_train, "train", nlp, overwrite, tokens_dict)
         else:
-            ques_train_map = process_questions(vqa_train, "train_val", nlp, overwrite)
-            process_questions(vqa_val, "train_val", nlp, overwrite, ques_train_map)
+            ques_train_map, ques_tokens_train_map = process_questions(vqa_train, "train_val", nlp,
+                                                                      overwrite, tokens_dict)
+            process_questions(vqa_val, "train_val", nlp, overwrite, tokens_dict, ques_train_map, ques_tokens_train_map)
     if only == 'all' or only == 'ans':
         print "Processing train answers"
         if not use_tests:
@@ -330,15 +429,15 @@ def process_data(vqa_train, dataSubType_train, imgDir_train,
             ques_to_img = process_ques_to_img(vqa_train, "train_val", overwrite)
             process_ques_to_img(vqa_val, "train_val", overwrite, ques_to_img)
     print "Done"
-    
+
     # -------------------------------------------------------------------------------------------------
 
     if only == 'all' or only == 'ques':
         print "Processing validation questions"
         if not use_tests:
-            process_questions(vqa_val, "val", nlp, overwrite)
+            process_questions(vqa_val, "val", nlp, overwrite, tokens_dict)
         else:
-            process_questions_test(dataFile_test, "test", nlp, overwrite)
+            process_questions_test(dataFile_test, "test", nlp, overwrite, tokens_dict)
     if only == 'all' or only == 'ans':
         print "Processing validation answers"
         if not use_tests:
@@ -387,17 +486,19 @@ def main(params):
     ans_to_id, id_to_ans = get_most_common_answers(vqa_train, vqa_val, int(params['num_answers']), params['ans_types'],
                                                    params['show_top_ans'], params['use_test'])
     img_model = get_img_model(params['img_model'])
+
     process_data(vqa_train, dataSubType_train, imgDir_train,
                  vqa_val, dataSubType_val, imgDir_val,
                  dataSubType_test, quesFile_test, imgDir_test,
-                 nlp, img_model, params['ans_types'], ans_to_id, id_to_ans, params['only'], params['img_model'],
-                 params['overwrite'], params['use_all_ans'], params['use_test'])
+                 nlp, img_model, ans_to_id, id_to_ans, params)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--ans_types', default=[], help='filter questions with specific answer types')
     parser.add_argument('--num_answers', default=1000, type=int, help='number of top answers to classify')
+    parser.add_argument('--word_embedding_dim', default=300, type=int, help='word embedding dimension for one word')
     parser.add_argument('--img_model', default='resnet50', help='which image model to use for embeddings')
     parser.add_argument('--only', default='all', help='which data to preprocess (all, ques, ans, img, ques_to_img)')
     parser.add_argument('--use_test', dest='use_test', action='store_true',
