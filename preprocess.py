@@ -46,6 +46,7 @@ def get_most_common_answers(vqa_train, vqa_val, num_answers, ans_types, show_top
         annIds_val = vqa_val.getQuesIds(ansTypes=ans_types)
         anns += vqa_val.loadQA(annIds_val)
     for ann in anns:
+        # answer = ann['multiple_choice_answer'].lower()
         for ans in ann['answers']:
             answer = ans['answer'].lower()
             if answer in ans_dict:
@@ -120,7 +121,9 @@ def process_img(img_model, imgId, dataSubType, imgDir, input_shape=(224, 224), o
         x = preprocess_input(x)
         features = img_model.predict(np.array([x]))
         features = np.reshape(features[0], output_shape)
-        features /= LA.norm(features, 2)
+        # TODO: Move this line in train_utils. This way we can experiment with multiple forms of normalization without
+        # having to regenerate the embeddings
+        features /= LA.norm(features, 2, axis=-1)
         return features
     else:
         return None
@@ -143,7 +146,9 @@ def get_output_shape(img_model_name):
         return (2048, 49)
 
 
-def process_questions(vqa, data, nlp, overwrite, question_word_vec_map={}):
+def process_questions(vqa, data, nlp, overwrite, question_word_vec_map=None):
+    if question_word_vec_map is None:
+        question_word_vec_map = {}
     filename = "data/%s_questions.pkl" % data
     if not os.path.exists(filename) or overwrite:
         annIds = vqa.getQuesIds()
@@ -166,7 +171,9 @@ def process_questions(vqa, data, nlp, overwrite, question_word_vec_map={}):
     return question_word_vec_map
 
 
-def process_answers(vqa, data, ans_types, ans_to_id, id_to_ans, overwrite, use_all_ans, ans_map={}):
+def process_answers(vqa, data, ans_types, ans_to_id, id_to_ans, overwrite, use_all_ans, ans_map=None):
+    if ans_map is None:
+        ans_map = {}
     if not ans_types:
         filename = "data/%s_answers.pkl" % data
     else:
@@ -193,7 +200,9 @@ def process_answers(vqa, data, ans_types, ans_to_id, id_to_ans, overwrite, use_a
     return ans_map
 
 
-def process_images(img_model, vqa, data, data_sub_type, img_dir, img_model_name, overwrite, img_map={}):
+def process_images(img_model, vqa, data, data_sub_type, img_dir, img_model_name, overwrite, img_map=None):
+    if img_map is None:
+        img_map = {}
     filename = "data/%s_images.pkl" % data
 
     if not os.path.exists(filename) or overwrite:
@@ -214,13 +223,16 @@ def process_images(img_model, vqa, data, data_sub_type, img_dir, img_model_name,
 
             img_map[imgId] = img
 
+        print "Saving %d images in %s" % (len(img_map), filename)
         f = open(filename, "w")
         pickle.dump(img_map, f, pickle.HIGHEST_PROTOCOL)
         f.close()
     return img_map
 
 
-def process_ques_to_img(vqa, data, overwrite, ques_to_img={}):
+def process_ques_to_img(vqa, data, overwrite, ques_to_img=None):
+    if ques_to_img is None:
+        ques_to_img = {}
     filename = "data/%s_ques_to_img.pkl" % data
 
     if not os.path.exists(filename) or overwrite:
@@ -238,7 +250,9 @@ def process_ques_to_img(vqa, data, overwrite, ques_to_img={}):
     return ques_to_img
 
 
-def process_questions_test(dataFile, data, nlp, overwrite, question_word_vec_map={}):
+def process_questions_test(dataFile, data, nlp, overwrite, question_word_vec_map=None):
+    if question_word_vec_map is None:
+        question_word_vec_map = {}
     filename = "data/%s_questions.pkl" % data
 
     if not os.path.exists(filename) or overwrite:
@@ -255,7 +269,9 @@ def process_questions_test(dataFile, data, nlp, overwrite, question_word_vec_map
         f.close()
 
 
-def process_images_test(img_model, data, dataFile, dataSubType, imgDir, img_model_name, overwrite, img_map={}):
+def process_images_test(img_model, data, dataFile, dataSubType, imgDir, img_model_name, overwrite, img_map=None):
+    if img_map is None:
+        img_map = {}
     filename = "data/%s_images.pkl" % data
 
     if not os.path.exists(filename) or overwrite:
@@ -279,7 +295,9 @@ def process_images_test(img_model, data, dataFile, dataSubType, imgDir, img_mode
         f.close()
 
 
-def process_ques_to_img_test(dataFile, data, overwrite, ques_to_img={}):
+def process_ques_to_img_test(dataFile, data, overwrite, ques_to_img=None):
+    if ques_to_img is None:
+        ques_to_img = {}
     filename = "data/%s_ques_to_img.pkl" % data
 
     if not os.path.exists(filename) or overwrite:

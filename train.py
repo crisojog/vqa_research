@@ -39,6 +39,7 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
     num_batches_train = int(math.ceil(float(train_dim) / batch_size))
     num_batches_val = int(math.ceil(float(val_dim) / batch_size))
     eval_every = params['eval_every']
+    start_from = params['start_from_epoch']
 
     train_loss, train_acc = [], []
     val_loss, val_acc = [], []
@@ -60,9 +61,16 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
     if not os.path.exists(savedir):
         os.mkdir(savedir)
 
+    if start_from > 0:
+        weights_filename = "%s/%s_epoch_%d_weights.h5" % (savedir, params['model'], start_from)
+        if os.path.exists(weights_filename):
+            model.load_weights(weights_filename)
+        else:
+            raise Exception('The weight file %s does not exist' % weights_filename)
+
     word_embedding_size = int(params['embedding_size'])
     use_first_words = params['use_first_words']
-    for k in range(num_epochs):
+    for k in range(start_from, start_from + num_epochs):
         loss, acc = train_epoch(k + 1, model, num_batches_train, batch_size, ques_train_map, ans_train_map,
                                 img_train_map, ques_train_ids, ques_to_img_train, word_embedding_size, use_first_words)
         train_loss.append(loss)
@@ -157,6 +165,8 @@ if __name__ == "__main__":
     parser.add_argument('--regularization_rate', default=0., type=float, help='regularization rate for the FC layers')
     parser.add_argument('--embedding_size', default=300, type=int, help='length of the word embedding')
     parser.add_argument('--eval_every', default=5, type=int, help='how often to run the model evaluation')
+    parser.add_argument('--start_from_epoch', default=0, type=int, help='start with weights from a previous epoch and '
+                                                                        'go on from there')
     parser.add_argument('--use_test', dest='use_test', action='store_true',
                         help='use test set (which also means training on train+val')
     parser.set_defaults(use_test=False)
