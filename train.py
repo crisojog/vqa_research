@@ -31,7 +31,7 @@ imgDir_test       = '%s/Images/%s/%s/' % (dataDir, dataType, 'test2015')
 # Train our model
 def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, ques_to_img_train,
                 ques_val_map, ans_val_map, img_val_map, ques_val_ids, ques_to_img_val,
-                id_to_ans, train_dim, val_dim, ans_types, params):
+                id_to_ans, train_dim, val_dim, ans_types, params, embedding_matrix):
 
     # training parameters
     num_epochs = params['num_epochs']
@@ -40,18 +40,21 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
     num_batches_val = int(math.ceil(float(val_dim) / batch_size))
     eval_every = params['eval_every']
     start_from = params['start_from_epoch']
+    use_embedding_matrix = not params['not_use_embedding_matrix']
 
     train_loss, train_acc = [], []
     val_loss, val_acc = [], []
     eval_acc = []
 
     print "Loading model"
+
     model = get_model(
         dropout_rate=float(params['dropout_rate']),
         regularization_rate=float(params['regularization_rate']),
         embedding_size=int(params['embedding_size']),
         num_classes=int(params['num_answers']),
-        model_name=params['model'])
+        model_name=params['model'],
+        embedding_matrix=embedding_matrix)
 
     if not ans_types:
         savedir = "models/%s_%s" % (params['model'], str(params['num_answers']))
@@ -72,19 +75,20 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
     use_first_words = params['use_first_words']
     for k in range(start_from, start_from + num_epochs):
         loss, acc = train_epoch(k + 1, model, num_batches_train, batch_size, ques_train_map, ans_train_map,
-                                img_train_map, ques_train_ids, ques_to_img_train, word_embedding_size, use_first_words)
+                                img_train_map, ques_train_ids, ques_to_img_train, word_embedding_size,
+                                use_first_words, use_embedding_matrix)
         train_loss.append(loss)
         train_acc.append(acc)
         if not params['use_test']:
             loss, acc = val_epoch(k + 1, model, num_batches_val, batch_size, ques_val_map, ans_val_map, img_val_map,
-                                  ques_val_ids, ques_to_img_val, word_embedding_size, use_first_words)
+                                  ques_val_ids, ques_to_img_val, word_embedding_size, use_first_words, use_embedding_matrix)
             val_loss.append(loss)
             val_acc.append(acc)
         if (k + 1) % eval_every == 0:
             model.save_weights("%s/%s_epoch_%d_weights.h5" % (savedir, params['model'], (k + 1)), overwrite=True)
             if not params['use_test']:
                 eval_accuracy = evaluate(model, vqa_val, batch_size, ques_val_map, img_val_map,
-                                         id_to_ans, word_embedding_size, use_first_words)
+                                         id_to_ans, word_embedding_size, use_first_words, use_embedding_matrix)
                 print ("Eval accuracy: %.2f" % eval_accuracy)
                 eval_acc.append(eval_accuracy)
 
@@ -99,17 +103,19 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
 
         model.load_weights("%s/%s_epoch_%d_weights.h5" % (savedir, params['model'], best_epoch))
         evaluate(model, vqa_val, batch_size, ques_val_map, img_val_map, id_to_ans,
-                 word_embedding_size, use_first_words, verbose=True)
+                 word_embedding_size, use_first_words, use_embedding_matrix, verbose=True)
 
 
 def main(params):
+    use_embedding_matrix = not params['not_use_embedding_matrix']
     ans_to_id, id_to_ans = get_most_common_answers(vqa_train, vqa_val, int(params['num_answers']), params['ans_types'],
                                                    show_top_ans=False, use_test=params['use_test'])
 
-    ques_train_map, ans_train_map, img_train_map, ques_to_img_train = get_train_data(params['ans_types'],
-                                                                                     params['use_test'])
-    ques_val_map, ans_val_map, img_val_map, ques_to_img_val = get_val_data(params['ans_types'],
-                                                                           params['use_test'])
+    embedding_matrix, ques_train_map, ans_train_map, img_train_map, ques_to_img_train = \
+        get_train_data(params['ans_types'], params['use_test'], use_embedding_matrix)
+    _, ques_val_map, ans_val_map, img_val_map, ques_to_img_val = get_val_data(params['ans_types'],
+                                                                              params['use_test'],
+                                                                              use_embedding_matrix)
 
     if not params['use_test']:
         filtered_ann_ids_train = set(vqa_train.getQuesIds(ansTypes=params['ans_types']))
@@ -131,7 +137,7 @@ def main(params):
     if not params['eval_only']:
         train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, ques_to_img_train,
                     ques_val_map, ans_val_map, img_val_map, ques_val_ids, ques_to_img_val,
-                    id_to_ans, train_dim, val_dim, params['ans_types'], params)
+                    id_to_ans, train_dim, val_dim, params['ans_types'], params, embedding_matrix)
     else:
         savedir = "models/%s_%s" % (params['model'], str(params['num_answers']))
         print "Loading model"
@@ -140,7 +146,8 @@ def main(params):
             regularization_rate=float(params['regularization_rate']),
             embedding_size=int(params['embedding_size']),
             num_classes=int(params['num_answers']),
-            model_name=params['model'])
+            model_name=params['model'],
+            embedding_matrix=embedding_matrix)
         model.load_weights("%s/%s_epoch_%d_weights.h5" % (savedir, params['model'], params['eval_epoch']))
         evaluate_for_test(
             quesFile_test,
@@ -150,7 +157,8 @@ def main(params):
             img_val_map,
             id_to_ans,
             params['embedding_size'],
-            params['use_first_words'])
+            params['use_first_words'],
+            use_embedding_matrix)
 
 
 if __name__ == "__main__":
@@ -175,6 +183,10 @@ if __name__ == "__main__":
     parser.set_defaults(eval_only=False)
     parser.add_argument('--eval_epoch', default=40, type=int, help='epoch to evaluate')
     parser.add_argument('--use_first_words', default=0, type=int, help='use the first X words of the question as a model parameter')
+    parser.add_argument('--not_use_embedding_matrix', dest='not_use_embedding_matrix', action='store_true',
+                        help='do not use a word embedding matrix to store the word embeddings,'
+                             ' otherwise the models will use an Embedding layer')
+    parser.set_defaults(not_use_embedding_matrix=False)
 
     args = parser.parse_args()
     params = vars(args)
