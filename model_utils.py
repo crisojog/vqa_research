@@ -10,7 +10,8 @@ def get_model(
         model_name,
         embedding_matrix=None):
     if model_name == 'model_1':
-        return model_1(embedding_size, dropout_rate, regularization_rate, num_classes)
+        return model_1(embedding_matrix, len(embedding_matrix),
+                       embedding_size, dropout_rate, regularization_rate, num_classes)
     elif model_name == 'model_2':
         return model_2(embedding_size, dropout_rate, num_classes)
     elif model_name == 'model_3':
