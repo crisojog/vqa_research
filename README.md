@@ -9,7 +9,7 @@ To run the code, you will need the following:
 * Scikit-learn
 * Scikit-image
 * Matplotlib
-* Spacy (after installing run ```python -m spacy download en```)
+* Spacy (after installing run ```python -m spacy download en_vectors_glove_md```)
 * Tqdm
 * Pickle
 (I sincerely hope I covered all dependencies)
