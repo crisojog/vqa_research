@@ -25,7 +25,7 @@ fileTypes = ['results', 'accuracy', 'evalQA', 'evalQuesType', 'evalAnsType']
 
 def get_batch(batch, batch_size, ques_map, ans_map,
               img_map, ques_ids, ques_to_img, word_embedding_size,
-              use_first_words, use_embedding_matrix):
+              use_first_words, use_embedding_matrix, num_classes):
     # get ids in the current batch
     batch_ids = ques_ids[batch * batch_size: min((batch + 1) * batch_size, len(ques_ids))]
     # filter out ids which don't have question, answer or image
@@ -60,11 +60,18 @@ def get_batch(batch, batch_size, ques_map, ans_map,
         else:
             batch_ques_aligned.append(question)
 
+    batch_answers_onehot = []
+    for ans in batch_answers:
+        ans_onehot = np.zeros(num_classes, dtype='float32')
+        if ans != -1:
+            ans_onehot[ans] = 1
+        batch_answers_onehot.append(ans_onehot)
+
     # finally, construct train_X, and train_y
     train_X = [np.array(batch_images), np.array(batch_ques_aligned)]
     if use_first_words > 0:
         train_X.append(np.array([embeddings[:use_first_words] for embeddings in batch_ques_aligned]))
-    train_y = np.array(batch_answers)
+    train_y = np.array(batch_answers_onehot)
     return train_X, train_y
 
 
@@ -80,14 +87,15 @@ def train_epoch(
         ques_to_img,
         word_embedding_size,
         use_first_words,
-        use_embedding_matrix):
+        use_embedding_matrix,
+        num_classes):
     # shuffle all question ids on each epoch
     np.random.shuffle(ques_ids)
 
     loss, accuracy, total = .0, .0, .0
     for batch in tqdm(range(num_batches), desc="Train epoch %d" % epoch_no):
-        train_X, train_y = get_batch(batch, batch_size, ques_map, ans_map, img_map, ques_ids,
-                                     ques_to_img, word_embedding_size, use_first_words, use_embedding_matrix)
+        train_X, train_y = get_batch(batch, batch_size, ques_map, ans_map, img_map, ques_ids, ques_to_img,
+                                     word_embedding_size, use_first_words, use_embedding_matrix, num_classes)
         total += len(train_y)
         # ... and train model with the batch
         l, a = model.train_on_batch(train_X, train_y)
@@ -111,11 +119,12 @@ def val_epoch(
         ques_to_img,
         word_embedding_size,
         use_first_words,
-        use_embedding_matrix):
+        use_embedding_matrix,
+        num_classes):
     loss, accuracy, total = .0, .0, .0
     for batch in tqdm(range(num_batches), desc="Val epoch %d" % epoch_no):
-        val_X, val_y = get_batch(batch, batch_size, ques_map, ans_map, img_map, ques_ids,
-                                 ques_to_img, word_embedding_size, use_first_words, use_embedding_matrix)
+        val_X, val_y = get_batch(batch, batch_size, ques_map, ans_map, img_map, ques_ids, ques_to_img,
+                                 word_embedding_size, use_first_words, use_embedding_matrix, num_classes)
         total += len(val_y)
         l, a = model.test_on_batch(val_X, val_y)
         loss += l * len(val_y)

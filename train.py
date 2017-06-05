@@ -76,12 +76,13 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
     for k in range(start_from, start_from + num_epochs):
         loss, acc = train_epoch(k + 1, model, num_batches_train, batch_size, ques_train_map, ans_train_map,
                                 img_train_map, ques_train_ids, ques_to_img_train, word_embedding_size,
-                                use_first_words, use_embedding_matrix)
+                                use_first_words, use_embedding_matrix, int(params['num_answers']))
         train_loss.append(loss)
         train_acc.append(acc)
         if not params['use_test']:
-            loss, acc = val_epoch(k + 1, model, num_batches_val, batch_size, ques_val_map, ans_val_map, img_val_map,
-                                  ques_val_ids, ques_to_img_val, word_embedding_size, use_first_words, use_embedding_matrix)
+            loss, acc = val_epoch(k + 1, model, num_batches_val, batch_size, ques_val_map, ans_val_map,
+                                  img_val_map, ques_val_ids, ques_to_img_val, word_embedding_size,
+                                  use_first_words, use_embedding_matrix, int(params['num_answers']))
             val_loss.append(loss)
             val_acc.append(acc)
         if (k + 1) % eval_every == 0:
@@ -91,7 +92,6 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
                                          id_to_ans, word_embedding_size, use_first_words, use_embedding_matrix)
                 print ("Eval accuracy: %.2f" % eval_accuracy)
                 eval_acc.append(eval_accuracy)
-
     plot_loss(train_loss, val_loss, savedir)
     plot_accuracy(train_acc, val_acc, savedir)
 
@@ -116,6 +116,8 @@ def main(params):
     _, ques_val_map, ans_val_map, img_val_map, ques_to_img_val = get_val_data(params['ans_types'],
                                                                               params['use_test'],
                                                                               use_embedding_matrix)
+
+    normalize_image_embeddings([img_train_map, img_val_map])
 
     if not params['use_test']:
         filtered_ann_ids_train = set(vqa_train.getQuesIds(ansTypes=params['ans_types']))

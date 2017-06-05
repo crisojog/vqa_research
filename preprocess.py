@@ -8,11 +8,11 @@ import numpy as np
 import spacy
 import json
 
+from keras.applications.xception import Xception
 from keras.applications.resnet50 import ResNet50
 from keras.applications.vgg19 import VGG19
 from keras.models import Model
 from keras.preprocessing import image
-from numpy import linalg as LA
 from tqdm import tqdm
 
 
@@ -92,33 +92,22 @@ def process_question(vqa, ann, nlp, question_word_vec_map, tokens_dict, question
     return np.array(question_word_vec), np.array(question_tokens)
 
 
-def process_answer(ann, data, ans_map, ans_to_id, id_to_ans, use_all_ans=False):
+def process_answer(ann, data, ans_map, ans_to_id, id_to_ans):
     quesId = ann['question_id']
     if quesId in ans_map:
         return ans_map[quesId]
-    encoding = np.zeros(len(id_to_ans))
-    if not use_all_ans:
-        answer = ann['multiple_choice_answer'].lower()
-        if answer in ans_to_id:
-            encoding[ans_to_id[answer]] = 1
-            return encoding
-        elif data == "val":
-            return np.zeros(len(id_to_ans))
-        else:
-            return None
+    #encoding = np.zeros(len(id_to_ans))
+
+    answer = ann['multiple_choice_answer'].lower()
+    if answer in ans_to_id:
+        return ans_to_id[answer]
+        #encoding[ans_to_id[answer]] = 1
+        #return encoding
+    elif data == "val":
+        return -1
+        #return np.zeros(len(id_to_ans))
     else:
-        for ans in ann['answers']:
-            answer = ans['answer'].lower()
-            if answer in ans_to_id:
-                encoding[ans_to_id[answer]] += 1
-        if np.sum(encoding) > 0:
-            #encoding /= np.sum(encoding)
-            encoding = softmax(encoding)
-            return encoding
-        elif data == "val":
-            return np.zeros(len(id_to_ans))
-        else:
-            return None
+        return None
 
 
 def process_img(img_model, imgId, dataSubType, imgDir, input_shape=(224, 224), output_shape=(4096,)):
@@ -129,9 +118,6 @@ def process_img(img_model, imgId, dataSubType, imgDir, input_shape=(224, 224), o
         x = preprocess_input(x)
         features = img_model.predict(np.array([x]))
         features = np.reshape(features[0], output_shape)
-        # TODO: Move this line in train_utils. This way we can experiment with multiple forms of normalization without
-        # having to regenerate the embeddings
-        features /= LA.norm(features, 2, axis=-1)
         return features
     else:
         return None
@@ -192,7 +178,7 @@ def process_questions(vqa, data, nlp, overwrite, tokens_dict,
     return question_word_vec_map, question_tokens_map
 
 
-def process_answers(vqa, data, ans_types, ans_to_id, id_to_ans, overwrite, use_all_ans, ans_map=None):
+def process_answers(vqa, data, ans_types, ans_to_id, id_to_ans, overwrite, ans_map=None):
     if ans_map is None:
         ans_map = {}
     if not ans_types:
@@ -209,11 +195,11 @@ def process_answers(vqa, data, ans_types, ans_to_id, id_to_ans, overwrite, use_a
             if quesId in ans_map:
                 continue
 
-            answer = process_answer(ann, data, ans_map, ans_to_id, id_to_ans, use_all_ans)
+            answer = process_answer(ann, data, ans_map, ans_to_id, id_to_ans)
             if answer is None:
                 continue
 
-            ans_map[quesId] = answer.tolist()
+            ans_map[quesId] = answer
 
         f = open(filename, "w")
         pickle.dump(ans_map, f, pickle.HIGHEST_PROTOCOL)
@@ -413,7 +399,6 @@ def process_data(vqa_train, dataSubType_train, imgDir_train,
     only = params['only']
     img_model_name = params['img_model']
     overwrite = params['overwrite']
-    use_all_ans = params['use_all_ans']
     use_tests = params['use_test']
     word_embedding_dim = params['word_embedding_dim']
 
@@ -430,10 +415,10 @@ def process_data(vqa_train, dataSubType_train, imgDir_train,
     if only == 'all' or only == 'ans':
         print "Processing train answers"
         if not use_tests:
-            process_answers(vqa_train, "train", ans_types, ans_to_id, id_to_ans, overwrite, use_all_ans)
+            process_answers(vqa_train, "train", ans_types, ans_to_id, id_to_ans, overwrite)
         else:
-            ans_map = process_answers(vqa_train, "train_val", ans_types, ans_to_id, id_to_ans, overwrite, use_all_ans)
-            process_answers(vqa_val, "train_val", ans_types, ans_to_id, id_to_ans, overwrite, use_all_ans, ans_map)
+            ans_map = process_answers(vqa_train, "train_val", ans_types, ans_to_id, id_to_ans, overwrite)
+            process_answers(vqa_val, "train_val", ans_types, ans_to_id, id_to_ans, overwrite, ans_map)
     if only == 'all' or only == 'img':
         print "Processing train images"
         if not use_tests:
@@ -463,7 +448,7 @@ def process_data(vqa_train, dataSubType_train, imgDir_train,
     if only == 'all' or only == 'ans':
         print "Processing validation answers"
         if not use_tests:
-            process_answers(vqa_val, "val", ans_types, ans_to_id, id_to_ans, overwrite, use_all_ans)
+            process_answers(vqa_val, "val", ans_types, ans_to_id, id_to_ans, overwrite)
         else:
             print "Skipping answers for test set"
     if only == 'all' or only == 'img':
@@ -530,9 +515,6 @@ if __name__ == "__main__":
     parser.set_defaults(show_top_ans=False)
     parser.add_argument('--overwrite', dest='overwrite', action='store_true', help='force overwrite')
     parser.set_defaults(overwrite=False)
-    parser.add_argument('--use_all_ans', dest='use_all_ans', action='store_true',
-                        help='use all answers for training, otherwise use only the multiple choice answer')
-    parser.set_defaults(use_all_ans=False)
 
     args = parser.parse_args()
     params = vars(args)

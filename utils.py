@@ -3,6 +3,8 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import cPickle as pickle
+from numpy import linalg as LA
+
 
 def softmax(x):
     """Compute softmax values for each sets of scores in x."""
@@ -108,3 +110,10 @@ def get_val_data(ans_types, use_test, use_embedding_matrix):
         ques_to_img_val = pickle.load(open("data/test_ques_to_img.pkl", "r"))
         print "Done"
         return embedding_matrix, ques_val_map, None, img_val_map, ques_to_img_val
+
+
+def normalize_image_embeddings(img_map_list):
+    for img_map in img_map_list:
+        for k, features in img_map.iteritems():
+            features /= LA.norm(features, 2, axis=0)
+            img_map[k] = features
