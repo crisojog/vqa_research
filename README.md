@@ -14,7 +14,7 @@ To run the code, you will need the following:
 * Pickle
 (I sincerely hope I covered all dependencies)
 
-## How to run
+## How to run (Deprecated)
 Start by getting the dataset and VQA API and unpacking it via
 ```bash
 chmod a+x get_started.sh
@@ -26,3 +26,8 @@ Run the notebook VQA_Keras_Models_and_Prepro.ipynb via
 ipython notebook
 ```
 And navigate to the mentioned file in your browser
+
+## To run preprocessing with ResNet152
+Create a folder called ```imagenet_models```<br/>
+Download the appropriate pre-trained weights from https://github.com/lef-fan/cnn_finetune and place the file in ```imagenet_models```<br/>
+
