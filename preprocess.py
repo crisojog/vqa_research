@@ -8,17 +8,19 @@ import numpy as np
 import spacy
 import json
 
+from keras.applications.inception_v3 import InceptionV3
 from keras.applications.xception import Xception
 from keras.applications.resnet50 import ResNet50
+from resnet_152 import ResNet152
 from keras.applications.vgg19 import VGG19
 from keras.models import Model
 from keras.preprocessing import image
+from keras.applications import imagenet_utils
+from keras.applications.inception_v3 import preprocess_input
 from tqdm import tqdm
 
 
 from VQA.PythonHelperTools.vqaTools.vqa import VQA
-from imagenet_utils import preprocess_input
-from utils import softmax
 
 
 def get_img_model(img_model_type):
@@ -36,6 +38,25 @@ def get_img_model(img_model_type):
         print ("Loading ResNet50-early-cut model")
         base_model = ResNet50(weights='imagenet', include_top=False)
         return Model(inputs=base_model.input, outputs=base_model.layers[-2].output)
+    elif img_model_type == "resnet152":
+        print ("Loading ResNet152 model")
+        return ResNet152(224, 224, 3, include_top=True)
+    elif img_model_type == "resnet152_multi":
+        print ("Loading ResNet152-early-cut model")
+        return ResNet152(224, 224, 3, include_top=False)
+    elif img_model_type == "inception":
+        print ("Loading InceptionV3 model")
+        base_model = InceptionV3(weights='imagenet', include_top=True)
+        return Model(inputs=base_model.input, outputs=base_model.layers[-2].output)
+    elif img_model_type == "inception_multi":
+        print ("Loading InceptionV3-early-cut model")
+        return InceptionV3(weights='imagenet', include_top=False)
+
+
+def get_preprocess_function(img_model_type):
+    if img_model_type in ["inception", "xception"]:
+        return preprocess_input
+    return imagenet_utils.preprocess_input
 
 
 def get_most_common_answers(vqa_train, vqa_val, num_answers, ans_types, show_top_ans=False, use_test=False):
@@ -96,27 +117,24 @@ def process_answer(ann, data, ans_map, ans_to_id, id_to_ans):
     quesId = ann['question_id']
     if quesId in ans_map:
         return ans_map[quesId]
-    #encoding = np.zeros(len(id_to_ans))
 
     answer = ann['multiple_choice_answer'].lower()
     if answer in ans_to_id:
         return ans_to_id[answer]
-        #encoding[ans_to_id[answer]] = 1
-        #return encoding
     elif data == "val":
         return -1
-        #return np.zeros(len(id_to_ans))
     else:
         return None
 
 
-def process_img(img_model, imgId, dataSubType, imgDir, input_shape=(224, 224), output_shape=(4096,)):
+def process_img(img_model, preprocess, imgId, dataSubType, imgDir, input_shape=(224, 224), output_shape=(4096,)):
     imgFilename = 'COCO_' + dataSubType + '_' + str(imgId).zfill(12) + '.jpg'
     if os.path.isfile(imgDir + imgFilename):
         img = image.load_img(imgDir + imgFilename, target_size=input_shape)
         x = image.img_to_array(img)
-        x = preprocess_input(x)
-        features = img_model.predict(np.array([x]))
+        x = np.expand_dims(x, axis=0)
+        x = preprocess(x)
+        features = img_model.predict(x)
         features = np.reshape(features[0], output_shape)
         return features
     else:
@@ -124,7 +142,7 @@ def process_img(img_model, imgId, dataSubType, imgDir, input_shape=(224, 224), o
 
 
 def get_input_shape(img_model_name):
-    if img_model_name == 'inception_v3':
+    if img_model_name in ['inception', 'xception']:
         return (299, 299)
     return (224, 224)
 
@@ -134,10 +152,12 @@ def get_output_shape(img_model_name):
         return (4096,)
     elif img_model_name == 'vgg19_multi':
         return (512, 49)
-    elif img_model_name == 'resnet50' or img_model_name == 'inception_v3':
+    elif img_model_name in ['resnet50', 'inception', 'xception', 'resnet152']:
         return (2048,)
-    elif img_model_name == 'resnet50_multi':
+    elif img_model_name in ['resnet50_multi', 'resnet152_multi']:
         return (2048, 49)
+    elif img_model_name == 'inception_multi':
+        return (2048, 64)
 
 
 def process_questions(vqa, data, nlp, overwrite, tokens_dict,
@@ -207,7 +227,7 @@ def process_answers(vqa, data, ans_types, ans_to_id, id_to_ans, overwrite, ans_m
     return ans_map
 
 
-def process_images(img_model, vqa, data, data_sub_type, img_dir, img_model_name, overwrite, img_map=None):
+def process_images(img_model, preprocess, vqa, data, data_sub_type, img_dir, img_model_name, overwrite, img_map=None):
     if img_map is None:
         img_map = {}
     filename = "data/%s_images.pkl" % data
@@ -224,7 +244,7 @@ def process_images(img_model, vqa, data, data_sub_type, img_dir, img_model_name,
             if imgId in img_map:
                 continue
 
-            img = process_img(img_model, ann['image_id'], data_sub_type, img_dir, input_shape, output_shape)
+            img = process_img(img_model, preprocess, ann['image_id'], data_sub_type, img_dir, input_shape, output_shape)
             if img is None:
                 continue
 
@@ -295,7 +315,7 @@ def process_questions_test(dataFile, data, nlp, overwrite, tokens_dict,
     f.close()
 
 
-def process_images_test(img_model, data, dataFile, dataSubType, imgDir, img_model_name, overwrite, img_map=None):
+def process_images_test(img_model, preprocess, data, dataFile, dataSubType, imgDir, img_model_name, overwrite, img_map=None):
     if img_map is None:
         img_map = {}
     filename = "data/%s_images.pkl" % data
@@ -311,7 +331,7 @@ def process_images_test(img_model, data, dataFile, dataSubType, imgDir, img_mode
 
             if imgId in img_map:
                 continue
-            img = process_img(img_model, imgId, dataSubType, imgDir, input_shape, output_shape)
+            img = process_img(img_model, preprocess, imgId, dataSubType, imgDir, input_shape, output_shape)
             if img is None:
                 continue
             img_map[imgId] = img
@@ -394,7 +414,7 @@ def get_tokens_dict(vqa_train, vqa_val, dataFile_test, nlp, word_embedding_dim):
 def process_data(vqa_train, dataSubType_train, imgDir_train,
                  vqa_val, dataSubType_val, imgDir_val,
                  dataSubType_test, dataFile_test, imgDir_test,
-                 nlp, img_model, ans_to_id, id_to_ans, params):
+                 nlp, img_model, preprocess, ans_to_id, id_to_ans, params):
     ans_types = params['ans_types']
     only = params['only']
     img_model_name = params['img_model']
@@ -422,9 +442,9 @@ def process_data(vqa_train, dataSubType_train, imgDir_train,
     if only == 'all' or only == 'img':
         print "Processing train images"
         if not use_tests:
-            process_images(img_model, vqa_train, "train", dataSubType_train, imgDir_train, img_model_name, overwrite)
+            process_images(img_model, preprocess, vqa_train, "train", dataSubType_train, imgDir_train, img_model_name, overwrite)
         else:
-            img_map = process_images(img_model, vqa_train, "train_val", dataSubType_train, imgDir_train, img_model_name,
+            img_map = process_images(img_model, preprocess, vqa_train, "train_val", dataSubType_train, imgDir_train, img_model_name,
                                      overwrite)
             process_images(img_model, vqa_val, "train_val", dataSubType_val, imgDir_val, img_model_name, overwrite,
                            img_map)
@@ -454,9 +474,9 @@ def process_data(vqa_train, dataSubType_train, imgDir_train,
     if only == 'all' or only == 'img':
         print "Processing validation images"
         if not use_tests:
-            process_images(img_model, vqa_val, "val", dataSubType_val, imgDir_val, img_model_name, overwrite)
+            process_images(img_model, preprocess, vqa_val, "val", dataSubType_val, imgDir_val, img_model_name, overwrite)
         else:
-            process_images_test(img_model, "test", dataFile_test, "test2015", imgDir_test,
+            process_images_test(img_model, preprocess, "test", dataFile_test, "test2015", imgDir_test,
                                 img_model_name, overwrite)
     if only == 'all' or only == 'ques_to_img':
         print "Processing validation question id to image id mapping"
@@ -493,11 +513,12 @@ def main(params):
     ans_to_id, id_to_ans = get_most_common_answers(vqa_train, vqa_val, int(params['num_answers']), params['ans_types'],
                                                    params['show_top_ans'], params['use_test'])
     img_model = get_img_model(params['img_model'])
+    preprocess = get_preprocess_function(params['img_model'])
 
     process_data(vqa_train, dataSubType_train, imgDir_train,
                  vqa_val, dataSubType_val, imgDir_val,
                  dataSubType_test, quesFile_test, imgDir_test,
-                 nlp, img_model, ans_to_id, id_to_ans, params)
+                 nlp, img_model, preprocess, ans_to_id, id_to_ans, params)
 
 
 if __name__ == "__main__":

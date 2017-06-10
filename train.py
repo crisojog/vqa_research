@@ -7,6 +7,9 @@ from preprocess import get_most_common_answers
 from train_utils import *
 from model_utils import get_model
 
+from keras import backend as K
+
+
 dataDir = 'VQA'
 taskType = 'OpenEnded'
 dataType = 'mscoco'  # 'mscoco' for real and 'abstract_v002' for abstract
@@ -92,6 +95,12 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
                                          id_to_ans, word_embedding_size, use_first_words, use_embedding_matrix)
                 print ("Eval accuracy: %.2f" % eval_accuracy)
                 eval_acc.append(eval_accuracy)
+
+        # Uncomment if you want to do a scheduled learning rate change
+        # if (k + 1) == (start_from + num_epochs // 2):
+        #     print "Changing learning rate from %f to %f" % (K.get_value(model.optimizer.lr), 0.5 * K.get_value(model.optimizer.lr))
+        #     K.set_value(model.optimizer.lr, 0.5 * K.get_value(model.optimizer.lr))
+
     plot_loss(train_loss, val_loss, savedir)
     plot_accuracy(train_acc, val_acc, savedir)
 

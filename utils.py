@@ -115,5 +115,9 @@ def get_val_data(ans_types, use_test, use_embedding_matrix):
 def normalize_image_embeddings(img_map_list):
     for img_map in img_map_list:
         for k, features in img_map.iteritems():
-            features /= LA.norm(features, 2, axis=0)
-            img_map[k] = features
+            if len(features.shape) > 1:
+                # norm = LA.norm(features, 2, axis=1).reshape((features.shape[0], 1))
+                norm = LA.norm(features, 2, axis=0)
+            else:
+                norm = LA.norm(features, 2)
+            img_map[k] = features / norm
