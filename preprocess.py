@@ -442,12 +442,13 @@ def process_data(vqa_train, dataSubType_train, imgDir_train,
     if only == 'all' or only == 'img':
         print "Processing train images"
         if not use_tests:
-            process_images(img_model, preprocess, vqa_train, "train", dataSubType_train, imgDir_train, img_model_name, overwrite)
+            process_images(img_model, preprocess, vqa_train, "train", dataSubType_train,
+                           imgDir_train, img_model_name, overwrite)
         else:
-            img_map = process_images(img_model, preprocess, vqa_train, "train_val", dataSubType_train, imgDir_train, img_model_name,
-                                     overwrite)
-            process_images(img_model, vqa_val, "train_val", dataSubType_val, imgDir_val, img_model_name, overwrite,
-                           img_map)
+            img_map = process_images(img_model, preprocess, vqa_train, "train_val", dataSubType_train,
+                                     imgDir_train, img_model_name, overwrite)
+            process_images(img_model, preprocess, vqa_val, "train_val", dataSubType_val,
+                           imgDir_val, img_model_name, overwrite, img_map)
     if only == 'all' or only == 'ques_to_img':
         print "Processing train question id to image id mapping"
         if not use_tests:
