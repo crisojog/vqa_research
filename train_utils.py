@@ -5,6 +5,8 @@ from tqdm import tqdm
 from VQA.PythonHelperTools.vqaTools.vqa import VQA
 from VQA.PythonEvaluationTools.vqaEvaluation.vqaEval import VQAEval
 
+from keras import backend as K
+
 dataDir = 'VQA'
 taskType = 'OpenEnded'
 dataType = 'mscoco'  # 'mscoco' for real and 'abstract_v002' for abstract
@@ -40,7 +42,8 @@ def get_batch(batch, batch_size, ques_map, ans_map,
     batch_images = [img_map[ques_to_img[batch_id]] for batch_id in batch_ids]
 
     # find out maximum length of a question in this batch
-    max_len = max([len(ques) for ques in batch_questions])
+    #max_len = max([len(ques) for ques in batch_questions])
+    max_len = 15
 
     # ... and pad all questions in the batch to that length
     # (more efficient than padding all questions to a single maximum length)
@@ -58,6 +61,8 @@ def get_batch(batch, batch_size, ques_map, ans_map,
                     np.append(question, np.zeros((max_len - len(question), word_embedding_size)), axis=0)
                 )
         else:
+            if len(question) > max_len:
+                question = question[:max_len]
             batch_ques_aligned.append(question)
 
     batch_answers_onehot = []
@@ -93,6 +98,7 @@ def train_epoch(
     np.random.shuffle(ques_ids)
 
     loss, accuracy, total = .0, .0, .0
+
     for batch in tqdm(range(num_batches), desc="Train epoch %d" % epoch_no):
         train_X, train_y = get_batch(batch, batch_size, ques_map, ans_map, img_map, ques_ids, ques_to_img,
                                      word_embedding_size, use_first_words, use_embedding_matrix, num_classes)
@@ -101,6 +107,7 @@ def train_epoch(
         l, a = model.train_on_batch(train_X, train_y)
         loss += l * len(train_y)
         accuracy += a * len(train_y)
+
     loss /= total
     accuracy /= total
     print("Train loss: {}\tAccuracy: {}".format(loss, accuracy))
@@ -138,7 +145,8 @@ def val_epoch(
 def process_question_batch(model, questions, question_ids, id_to_ans, images,
                            results, word_embedding_size, use_first_words, use_embedding_matrix):
     # find out maximum length of a question in this batch
-    max_len = max([len(ques) for ques in questions])
+    # max_len = max([len(ques) for ques in questions])
+    max_len = 15
     # ... and pad all questions in the batch to that length
     # (more efficient than padding all questions to a single maximum length)
     ques_aligned = []
@@ -155,6 +163,8 @@ def process_question_batch(model, questions, question_ids, id_to_ans, images,
                     np.append(question, np.zeros((max_len - len(question), word_embedding_size)), axis=0)
                 )
         else:
+            if len(question) > max_len:
+                question = question[:max_len]
             ques_aligned.append(question)
     val_X = [np.array(images), np.array(ques_aligned)]
     if use_first_words > 0:

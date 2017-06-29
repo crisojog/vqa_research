@@ -76,6 +76,8 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
 
     word_embedding_size = int(params['embedding_size'])
     use_first_words = params['use_first_words']
+
+    lr_0 = K.get_value(model.optimizer.lr)
     for k in range(start_from, start_from + num_epochs):
         loss, acc = train_epoch(k + 1, model, num_batches_train, batch_size, ques_train_map, ans_train_map,
                                 img_train_map, ques_train_ids, ques_to_img_train, word_embedding_size,
@@ -95,18 +97,19 @@ def train_model(ques_train_map, ans_train_map, img_train_map, ques_train_ids, qu
                                          id_to_ans, word_embedding_size, use_first_words, use_embedding_matrix)
                 print ("Eval accuracy: %.2f" % eval_accuracy)
                 eval_acc.append(eval_accuracy)
+        if params['decay_every'] > 0 and (k + 1 - start_from) % params['decay_every'] == 0:
+            new_lr = max(lr_0 * math.exp(params['decay'] * (k + 1)), params['min_lr'])
+            print "Changing learning rate from %f to %f" % (K.get_value(model.optimizer.lr), new_lr)
+            K.set_value(model.optimizer.lr, new_lr)
 
-        # Uncomment if you want to do a scheduled learning rate change
-        # if (k + 1) == (start_from + num_epochs // 2):
-        #     print "Changing learning rate from %f to %f" % (K.get_value(model.optimizer.lr), 0.5 * K.get_value(model.optimizer.lr))
-        #     K.set_value(model.optimizer.lr, 0.5 * K.get_value(model.optimizer.lr))
+        # Plot loss, accuracy and eval
+        plot_loss(train_loss, val_loss, savedir)
+        plot_accuracy(train_acc, val_acc, savedir)
 
-    plot_loss(train_loss, val_loss, savedir)
-    plot_accuracy(train_acc, val_acc, savedir)
+        if not params['use_test'] and (k + 1) % eval_every == 0:
+            plot_eval_accuracy(eval_acc, savedir)
 
     if not params['use_test']:
-        plot_eval_accuracy(eval_acc, savedir)
-
         best_epoch = (1 + np.argmax(np.array(eval_acc))) * eval_every
         print "Best accuracy %.02f on epoch %d" % (max(eval_acc), best_epoch)
 
@@ -160,16 +163,20 @@ def main(params):
             model_name=params['model'],
             embedding_matrix=embedding_matrix)
         model.load_weights("%s/%s_epoch_%d_weights.h5" % (savedir, params['model'], params['eval_epoch']))
-        evaluate_for_test(
-            quesFile_test,
-            model,
-            params['batch_size'],
-            ques_val_map,
-            img_val_map,
-            id_to_ans,
-            params['embedding_size'],
-            params['use_first_words'],
-            use_embedding_matrix)
+        if params['use_test']:
+            evaluate_for_test(
+                quesFile_test,
+                model,
+                params['batch_size'],
+                ques_val_map,
+                img_val_map,
+                id_to_ans,
+                params['embedding_size'],
+                params['use_first_words'],
+                use_embedding_matrix)
+        else:
+            evaluate(model, vqa_val, params['batch_size'], ques_val_map, img_val_map,
+                     id_to_ans, params['embedding_size'], params['use_first_words'], use_embedding_matrix, verbose=True)
 
 
 if __name__ == "__main__":
@@ -193,11 +200,16 @@ if __name__ == "__main__":
                         help='used to only evaluate a specific model (specify which epoch as well)')
     parser.set_defaults(eval_only=False)
     parser.add_argument('--eval_epoch', default=40, type=int, help='epoch to evaluate')
-    parser.add_argument('--use_first_words', default=0, type=int, help='use the first X words of the question as a model parameter')
+    parser.add_argument('--use_first_words', default=0, type=int, help='use the first X words of the question as a '
+                                                                       'model parameter')
     parser.add_argument('--not_use_embedding_matrix', dest='not_use_embedding_matrix', action='store_true',
                         help='do not use a word embedding matrix to store the word embeddings,'
                              ' otherwise the models will use an Embedding layer')
     parser.set_defaults(not_use_embedding_matrix=False)
+    parser.add_argument('--decay_every', default=0, type=int, help='every x epochs decay the learning rate by the '
+                                                                   '--decay value')
+    parser.add_argument('--decay', default=0., type=float, help='learning rate decay value')
+    parser.add_argument('--min_lr', default=0.00005, type=float, help='minimum learning rate after decay')
 
     args = parser.parse_args()
     params = vars(args)

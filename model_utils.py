@@ -1,6 +1,7 @@
-from model_1 import model_1
-from model_2 import model_2
-from model_3 import model_3
+from baseline import baseline
+from baseline_cnn import baseline_cnn
+from dual_att import dual_att
+
 
 def get_model(
         dropout_rate,
@@ -9,10 +10,12 @@ def get_model(
         num_classes,
         model_name,
         embedding_matrix=None):
-    if model_name == 'model_1':
-        return model_1(embedding_matrix, len(embedding_matrix),
-                       embedding_size, dropout_rate, regularization_rate, num_classes)
-    elif model_name == 'model_2':
-        return model_2(embedding_size, dropout_rate, num_classes)
-    elif model_name == 'model_3':
-        return model_3(embedding_size, dropout_rate, regularization_rate, num_classes)
+    if model_name == 'baseline':
+        return baseline(embedding_matrix, len(embedding_matrix),
+                        embedding_size, dropout_rate, regularization_rate, num_classes)
+    elif model_name == 'baseline_cnn':
+        return baseline_cnn(embedding_matrix, len(embedding_matrix),
+                            embedding_size, dropout_rate, regularization_rate, num_classes)
+    elif model_name == 'dual_att':
+        return dual_att(embedding_matrix, len(embedding_matrix),
+                        embedding_size, dropout_rate, regularization_rate, num_classes)

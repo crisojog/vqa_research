@@ -151,13 +151,13 @@ def get_output_shape(img_model_name):
     if img_model_name == 'vgg19':
         return (4096,)
     elif img_model_name == 'vgg19_multi':
-        return (512, 49)
+        return (49, 512)
     elif img_model_name in ['resnet50', 'inception', 'xception', 'resnet152']:
         return (2048,)
     elif img_model_name in ['resnet50_multi', 'resnet152_multi']:
-        return (2048, 49)
+        return (49, 2048)
     elif img_model_name == 'inception_multi':
-        return (2048, 64)
+        return (64, 2048)
 
 
 def process_questions(vqa, data, nlp, overwrite, tokens_dict,
@@ -421,7 +421,7 @@ def process_data(vqa_train, dataSubType_train, imgDir_train,
     overwrite = params['overwrite']
     use_tests = params['use_test']
     word_embedding_dim = params['word_embedding_dim']
-
+    
     if only == 'all' or only == 'ques':
         print "Obtaining tokens from all datasets"
         tokens_dict = get_tokens_dict(vqa_train, vqa_val, dataFile_test, nlp, word_embedding_dim)
@@ -457,7 +457,7 @@ def process_data(vqa_train, dataSubType_train, imgDir_train,
             ques_to_img = process_ques_to_img(vqa_train, "train_val", overwrite)
             process_ques_to_img(vqa_val, "train_val", overwrite, ques_to_img)
     print "Done"
-
+    
     # -------------------------------------------------------------------------------------------------
 
     if only == 'all' or only == 'ques':
