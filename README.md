@@ -31,13 +31,13 @@ If you want to preprocess the data in order to train on the train + val sets and
 
 To train, run
 ```
-python train.py --model dual_att --num_answers 3000 --eval_every 2 --decay_every 15 --decay -0.025
+python train.py --model dual_att --num_answers 3000 --eval_every 2 --decay_every 15 --decay -0.025 --batch_size 128
 ```
 in order to achieve the best results.
 
 To evaluate a specific model trained on train + val, in order to upload the test-dev results on codalab run
 ```
-python train.py --model dual_att --num_answers 3000 --eval_every 2 --decay_every 15 --decay -0.025 --use_test --eval_only --eval_epoch 120
+python train.py --model dual_att --num_answers 3000 --eval_every 2 --decay_every 15 --decay -0.025 --use_test --eval_only --eval_epoch 120 --batch_size 128
 ```
 where the ```--eval_epoch``` parameter should tell the epoch to use when evaluating. This snapshot must exist in the models directory.
 
